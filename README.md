@@ -4,7 +4,7 @@ This repository contains introductory material for the analysis of accelerometry
 Notebooks were initially developed in python, and are available [here](https://github.com/OxWearables/Oxford_Wearables_Activity_Recognition.git).
 However, we look to adapt the spirit of those notebooks into R, as an intro to those with an epidemiology background to consider difficulties in processing complicated exposures.
 
-This repository is with thanks to Prof. Aiden Doherty, Dr. Shing Chan, Dr. Ben Feakins, however is currently maintained by Aidan Acquah.
+This repository is with thanks to Dr. Ben Feakins, Dr. Shing Chan, Prof. Aiden Doherty, however is currently maintained by Aidan Acquah.
 
 ## Understanding the Dataset
 
