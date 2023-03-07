@@ -30,9 +30,10 @@ Getting set up is a simple process, but may take some time to complete all steps
 ```{bash}
 git clone https://github.com/OxWearables/Wearables_Activity_Recognition_R.git
 ```
-If however, you do not have experience with git, or do not have git installed, you can instead download this repository from [https://github.com/OxWearables/Wearables_Activity_Recognition_R](https://github.com/OxWearables/Wearables_Activity_Recognition_R. 
+If however, you do not have experience with git, or do not have git installed, you can instead download this repository from [https://github.com/OxWearables/Wearables_Activity_Recognition_R](https://github.com/OxWearables/Wearables_Activity_Recognition_R). 
 After opening the webpage, click the "Code" button and select "Download ZIP". 
 Ensure to extract the downloaded zip file.
 
 2. Open the "Wearables_Activity_Recognition_R" project folder in RStudio. 
 If you do not have RStudio install, you can follow the instructions here: [https://rstudio-education.github.io/hopr/starting.html](https://rstudio-education.github.io/hopr/starting.html)
+
