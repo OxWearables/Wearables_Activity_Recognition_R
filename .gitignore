@@ -41,3 +41,6 @@ vignettes/*.pdf
 # Data/figure folders
 data/
 figures/
+
+# Preparation file
+scripts/0-Preparation.Rmd
