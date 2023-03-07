@@ -44,7 +44,6 @@ The Capture-24 dataset consists of wrist-worn accelerometer data collected from 
 ## Setup
 
 Install required packages:
-
 ```{r install-packages, results = 'hide'}
 ### Required Packages ###
 pkgs <- c(
@@ -67,35 +66,32 @@ rm(pkgs)
 ```
 
 Load required package namespaces:
-
 ```{r load-packages, results = 'hide'}
 ### Packages ###
 library(ggplot2)
 library(viridis)
 library(data.table)
-library(Rtsne)
 library(here)
 ```
 
 Define some useful path variables:
-
 ```{r paths}
 ### Paths ###
 ## Capture-24 Directory ##
-dir_cap24 <- paste0(here(), 'data/capture24sample', sep = '/')
-zip_cap24 <- paste0(here(), 'data/capture24sample.zip', sep = '/')
+dir_cap24 <- paste(here(), 'data/capture24sample', sep = '/')
+zip_cap24 <- paste(here(), 'data/capture24sample.zip', sep = '/')
 ```
 
 
 ## Load & inspect the dataset
 
 To run this notebook, you'll need a sample of the [Capture-24 dataset](https://ora.ox.ac.uk/objects/uuid:99d7c092-d865-4a19-b096-cc16440cd001).
-This has been uploaded to a google drive, and can be downloaded with the code below.
+This has been uploaded to [zenodo](https://zenodo.org/record/7705976#.ZAdwqHbP1aQ), and can be downloaded with the code below.
 
 Download the data:
 ```{r data-download, eval = F}
 ## Download Capture24 Sample Data ##
-url <- "https://ora.ox.ac.uk/objects/uuid:99d7c092-d865-4a19-b096-cc16440cd001/files/rpr76f381b"
+url <- "https://zenodo.org/record/7705976/files/capture24_sample.zip?download=1"
 download.file(url, zip_cap24, mode = "wb", timeout = 1200)
 ```
 
@@ -112,7 +108,6 @@ unzip(
 ```
 
 Let's see what's in the extracted archive:
-
 ```{r list-files}
 ### Print the list of files ###
 list.files(dir_cap24)
@@ -120,7 +115,6 @@ list.files(dir_cap24)
 
 Note that for this analysis, we have only downloaded the raw accelerometry data from 1 participant.
 Let's load and inspect the raw data for one that participant (p001):
-
 ```{r data-import}
 ### Data for Participant 001 ###
 dt_p001 <- fread(
@@ -134,7 +128,6 @@ head(dt_p001, 10)
 ```
 
 Check for missing values (`NA`s) and remove any rows containing them:
-
 ```{r na-values, results = 'hold'}
 ### Check for Rows Containing NAs ###
 cat('NA values present?:\n') # '\n' is the new line feed.
@@ -145,7 +138,6 @@ dt_p001 <- dt_p001[complete.cases(dt_p001)]
 ```
 
 Let's inspect the `annotation` column:
-
 ```{r unique-annotations-1}
 ### Unique Annotations Present ###
 anno <- sort(unique(dt_p001[, annotation]))
@@ -155,7 +147,6 @@ substr(anno, 1, 100)[1:10] # Truncate printing to 100 chars.
 ```
 
 The `annotation` column appears to be a nested semi-colon-delimited list of values. We can inspect the unique values present as follows:
-
 ```{r unique-annotation-2, results = 'hold'}
 ### Split Strings at ';' ###
 anno <- strsplit(anno, ';')
@@ -176,7 +167,6 @@ rm(anno)
 The annotations are based on the [Compendium of Physical Activity](https://sites.google.com/site/compendiumofphysicalactivities/home). There are more than 200 unique annotations identified in the whole dataset. As you can see, the annotations can be very detailed.
 
 For our purposes, it is enough to translate the annotations into a simpler set of labels. The provided _annotation-label-dictionary.csv_ file contains a few options that were used in previous works.
-
 ```{r annotations-dictionary}
 ### Import Annotations Labels ###
 dt_dic <- fread(
@@ -218,7 +208,6 @@ head(dt_p001, 10)
 ```
 
 To continue, let's extract 30-sec windows of activity --- these will make up the learning dataset.
-
 ```{r 30s-time-windows}
 ### Group Data into 30s Windows ###
 breaks <- with(dt_p001, seq(min(time), max(time), by = 30))
@@ -244,7 +233,6 @@ rm(breaks)
 ```
 
 Let's take a closer look at the distribution of the labels.
-
 ```{r label-distributions}
 ### Label Distributions ###
 labs <- dt_p001[, .(label = first(label)), by = tgrp][, label]
@@ -281,10 +269,9 @@ We observe some imbalance in the data. This will likely be an issue later for th
 ## Visualisation
 
 Visualization helps us get some insight and anticipate the difficulties that may arise during the modelling. Let's visualize some examples for each activity label.
-
 ```{r visualisation, results = 'hold'}
 ### Set Seed ###
-set.seed(42)
+set.seed(0)
 
 ### Sample 1 Random 30s Time Window Per Activity Label ###
 samp <- dt_p001[, .SD[1], by = tgrp][, .(tgrp = sample(tgrp, 1)), by = label][, tgrp]
@@ -320,8 +307,8 @@ rm(samp, dt_samp)
 
 ## Feature extraction
 
-Let's extract some commonly used time series features from each activity window. Feel free to engineer your own features!
-
+Let's extract some commonly used time series features from each activity window. 
+If you have some time after this session, feel free to engineer your own features!
 ```{r feature-extraction}
 ### Euclidean Distance Function ###
 # Check `base::norm(x, type = 'F')` & `Matrix::norm(x, type = 'F')`
@@ -353,6 +340,7 @@ dt_feat[, tgrp := NULL]
 ### First 2 Rows Per Label ###
 dt_feat[, head(.SD, 2), by = label]
 ```
+
 
 ## References
 

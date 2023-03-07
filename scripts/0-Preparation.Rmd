@@ -69,7 +69,6 @@ library(data.table)
 library(here)
 library(foreach)
 library(doParallel)
-library(progress)
 ```
 
 Define some useful path variables:
@@ -92,42 +91,42 @@ To run this notebook, you'll need the [Capture-24 dataset](https://ora.ox.ac.uk/
 
 Download the data:
 ```{r}
-url <- "https://ora.ox.ac.uk/objects/uuid:99d7c092-d865-4a19-b096-cc16440cd001/files/rpr76f381b"
-download.file(url, zip_cap24, mode = "wb", timeout = 1200)
+if (!file.exists(zip_cap24)) {
+  url <- "https://ora.ox.ac.uk/objects/uuid:99d7c092-d865-4a19-b096-cc16440cd001/files/rpr76f381b"
+  download.file(url, zip_cap24, mode = "wb", timeout = 1200)
+}
 ```
 
 Extract the data:
-
 ```{r data-extract, eval = F}
 ## Extract Capture24 Data ##
-unzip(
-  zipfile = zip_cap24,
-  overwrite = F,
-  junkpaths = T,
-  exdir = dir_cap24,
-  unzip = getOption('unzip')
-)
+if (!dir.exists(dir_cap24)) {
+  unzip(
+    zipfile = zip_cap24,
+    overwrite = F,
+    junkpaths = T,
+    exdir = dir_cap24,
+    unzip = getOption('unzip')
+  )
+}
 ```
 
-Let's see what's in the extracted archive:
-
-```{r list-files}
-### Print First 10 Files ###
-list.files(dir_cap24)[1:10]
-```
-
+Copy the required samples into the new directory
 ```{r copy-samples}
-dir.create(dir_cap24_sample)
-file.copy(file.path(dir_cap24, 'annotation-label-dictionary.csv'),
-          file.path(dir_cap24_sample, 'annotation-label-dictionary.csv'))
+if (!dir.exists(dir_cap24_sample)) {
+  dir.create(dir_cap24_sample)
+  file.copy(file.path(dir_cap24, 'annotation-label-dictionary.csv'),
+            file.path(dir_cap24_sample, 'annotation-label-dictionary.csv'))
 
-file.copy(file.path(dir_cap24, 'metadata.csv'),
-          file.path(dir_cap24_sample, 'metadata.csv'))
+  file.copy(file.path(dir_cap24, 'metadata.csv'),
+            file.path(dir_cap24_sample, 'metadata.csv'))
 
-file.copy(file.path(dir_cap24, 'P001.csv.gz'),
-          file.path(dir_cap24_sample, 'P001.csv.gz'))
+  file.copy(file.path(dir_cap24, 'P001.csv.gz'),
+            file.path(dir_cap24_sample, 'P001.csv.gz'))
+}
 ```
 
+Extract features from each participant file. Note this takes some time.
 ```{r extract-features}
 # Import annotations labels
 dt_dic <- fread(
@@ -230,7 +229,7 @@ feats_all <- foreach(i = 1:151) %dopar% {
   # Drop tgrp variable
   dt_feat[, tgrp := NULL]
   
-  pb.tick()
+  print(i)
   
   # Add to list
   dt_feat
@@ -243,13 +242,13 @@ stopCluster(cl)
 dt_feats_all <- rbindlist(feats_all)
 
 # Save dt_feats_all as a CSV file
-fwrite(dt_feats_all, file = file.path(dir_cap24_sample, "feats_all.csv"), sep = ",")
+fwrite(dt_feats_all, file = file.path(dir_cap24_sample, "feats_all.csv.gz"), sep = ",")
 ```
 
+Zip the new folder into a zip file to be uploaded.
+Note: this code does not work so I did this manually instead.
 ```{r zip-samples}
 zip(zip_cap24_sample, 
     list.files(dir_cap24_sample, recursive = TRUE, full.names = TRUE))
 ```
-
-
 
