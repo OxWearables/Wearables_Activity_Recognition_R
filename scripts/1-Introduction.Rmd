@@ -114,7 +114,8 @@ list.files(dir_cap24)
 ```
 
 Note that for this analysis, we have only downloaded the raw accelerometry data from 1 participant.
-Let's load and inspect the raw data for one that participant (p001):
+(The full Capture-24 dataset contains raw data from 151 participants.)
+Let's load and inspect the raw data for that participant (p001):
 ```{r data-import}
 ### Data for Participant 001 ###
 dt_p001 <- fread(
@@ -307,7 +308,13 @@ rm(samp, dt_samp)
 
 ## Feature extraction
 
-Let's extract some commonly used time series features from each activity window. 
+For the 30s window of data, we have 3 axes of readings taken at 100Hz (100 each second). In total, that is 9000 readings. 
+While this may be useful for more specific tasks/models, for the purpose of activity recognition in this session, 
+this number of data readings is excessive, and will make our processing more computationally expensive.
+These 9000 readings can also have a large amount of redundancy, such as the accelerometry readings for sleep being largely the same throughout the window.
+For this reason, we look to simplify each windows into some summary features, which can be used to detect activity. 
+Before doing so however, consider the consequences of making this decision to simplify the data from each window. What are the risks that come with this decision?
+
 If you have some time after this session, feel free to engineer your own features!
 ```{r feature-extraction}
 ### Euclidean Distance Function ###
@@ -341,8 +348,19 @@ dt_feat[, tgrp := NULL]
 dt_feat[, head(.SD, 2), by = label]
 ```
 
+While it would be ideal to allow you to extract your own features from all 151 participants, this is a very time consuming and computationally expensive task. 
+For the purposes of this session, it has already been completed for you, and is found in the `feats_all.csv.gz` file you downloaded.
+You will be able to make use of this file in the next notebook: `2-Random-Forests.Rmd`.
 
 ## References
+
+Papers using the capture24 dataset:
+
+* [Reallocating time from machine-learned sleep, sedentary behaviour or light physical activity to moderate-to-vigorous physical activity is associated with lower cardiovascular disease risk](https://www.medrxiv.org/content/10.1101/2020.11.10.20227769v2.full?versioned=true) (Walmsley2020 labels) 
+* [GWAS identifies 14 loci for device-measured physical activity and sleep duration](https://www.nature.com/articles/s41467-018-07743-4) (Doherty2018 labels)
+* [Statistical machine learning of sleep and physical activity phenotypes from sensor data in 96,220 UK Biobank participants](https://www.nature.com/articles/s41598-018-26174-1) (Willetts2018 labels)
+
+## Extras
 
 Ideas for hand-crafted features:
 
@@ -350,9 +368,3 @@ Ideas for hand-crafted features:
 * [A universal, accurate intensity-based classification of different physical activities using raw data of accelerometer](https://www.ncbi.nlm.nih.gov/pubmed/24393233)
 * [Activity recognition using a single accelerometer placed at the wrist or ankle](https://www.ncbi.nlm.nih.gov/pubmed/23604069)
 * [Hip and Wrist Accelerometer Algorithms for Free-Living Behavior Classification](https://www.ncbi.nlm.nih.gov/pubmed/26673126)
-
-Papers using the capture24 dataset:
-
-* [Reallocating time from machine-learned sleep, sedentary behaviour or light physical activity to moderate-to-vigorous physical activity is associated with lower cardiovascular disease risk](https://www.medrxiv.org/content/10.1101/2020.11.10.20227769v2.full?versioned=true) (Walmsley2020 labels) 
-* [GWAS identifies 14 loci for device-measured physical activity and sleep duration](https://www.nature.com/articles/s41467-018-07743-4) (Doherty2018 labels)
-* [Statistical machine learning of sleep and physical activity phenotypes from sensor data in 96,220 UK Biobank participants](https://www.nature.com/articles/s41598-018-26174-1) (Willetts2018 labels)
