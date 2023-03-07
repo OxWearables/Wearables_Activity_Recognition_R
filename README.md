@@ -1,9 +1,3 @@
----
-editor_options: 
-  markdown: 
-    wrap: sentence
----
-
 # Wearable Activity Recognition R: A set of introductory notebooks for activity recognition of wearables data using R.
 
 This repository contains introductory material for the analysis of accelerometry data collected from wearable devices.
