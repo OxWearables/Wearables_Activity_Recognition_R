@@ -1,0 +1,205 @@
+---
+title: 'Random Forests'
+output: github_document
+---
+
+
+<!-- NOTES -->
+<!-- https://github.com/activityMonitoring/machineLearningPlay/blob/master/rLearningExploration.ipynb -->
+<!-- https://github.com/activityMonitoring/Oxford_Wearables_Activity_Recognition -->
+
+
+```{r setup, include = F}
+### Knit Options ###
+knitr::opts_knit[['set']](
+  base.dir = '~/Git/activity-id-prac-r/',
+  root.dir = '~/Git/activity-id-prac-r/'
+)
+
+### Chunk Options ###
+knitr::opts_chunk[['set']](
+  echo = T,
+  comment = '',
+  dpi = 600,
+  warning = F,
+  message = F,
+  fig.path = 'src/figures/'
+)
+
+### General Options ###
+options(
+  digits = 7, # Default = 7
+  scipen = 0, # Default = 0
+  width = 120 # Default = 80
+)
+```
+
+
+## Setup
+
+Install required packages:
+
+```{r install-packages, results = 'hide'}
+### Required Packages ###
+pkgs <- c(
+  'data.table', # Data import/management.
+  'randomForest' # Random forest.
+)
+
+### Packages to Install ###
+pkgs <- pkgs[!{pkgs %in% rownames(installed.packages())}]
+
+### Install (if Required) ###
+install.packages(pkgs)
+
+### Tidy Up ###
+rm(pkgs)
+```
+
+Load required package namespaces:
+
+```{r packages, results = 'hide'}
+### Packages ###
+library(data.table)
+library(randomForest)
+```
+
+### Data
+
+For this part we're going to re-use the extracted feature set for subject 040 from the previous section (`dt_feat`).
+
+```{r features}
+### First 2 Rows Per Label ###
+dt_feat[, head(.SD, 2), by = label]
+```
+
+### Train/test split
+
+Let's split that data into training (<sup>2</sup>&frasl;<sub>3</sub>) & test (<sup>1</sup>&frasl;<sub>3</sub>) sets.
+
+```{r}
+### Split Data into Training & Test Sets ###
+## Set Seed ##
+set.seed(42)
+## Stratified Indices (2/3 Obs Per Label) ##
+ind <- dt_feat[, .(
+  ind = sample(.I, round(2/3*.N))
+), by = label][, ind]
+## Data Split ##
+dt_train <- dt_feat[ind]
+dt_test <- dt_feat[-ind]
+
+### Tidy Up ###
+rm(ind)
+```
+
+
+## Random forests
+
+Random forests are an ensemble learning method in which the results of multiple decision trees are aggregated to identify the most popular result. We can fit a random forest to our extracted feature set using the following code.
+
+```{r random-forest, results = 'hold'}
+### Predictors ###
+predvars <- names(dt_train)[names(dt_train) != 'label']
+
+### Set Seed ###
+set.seed(42)
+
+### Random Forest Fit ###
+fit_rf <- randomForest(
+  # Training Data #
+  x = dt_train[, ..predvars],
+  y = dt_train[, label],
+  # Test Data #
+  xtest = dt_test[, ..predvars],
+  ytest = dt_test[, label],
+  # Model Params #
+  replace = T, # Should sampling of cases be done with replacement?
+  strata = label, # Factor variable used for stratified sampling.
+  sampsize = 1e2, # Size(s) of samples to draw.
+  importance = T, # Should variable importance be assessed?
+  keep.forest = T # Keep final forest for predictions.
+)
+
+### Confusion Matrix ###
+fit_rf
+
+### Tidy Up ###
+rm(predvars)
+```
+
+Note, this model has several parameters set to values you may wish to tweak later:
+
+* `ntree = 500` --- the number of trees to grow
+* `mtry = if (!is.null(y) && !is.factor(y)) max(floor(ncol(x)/3), 1) else floor(sqrt(ncol(x)))` --- the number of variables randomly sampled at each split.
+
+The out-of-bag (OOB) & per category misclassification rates with increasing number of trees grown:
+
+```{r random-forest-errors, results = 'hold'}
+### Plot ###
+plot(
+  x = fit_rf, # Model object.
+  main = 'Random Forest Misclassification Rate', # Title.
+  ylim = c(0, 0.8), # y-axis limits.
+  bty = 'n' # Remove outer box.
+)
+
+### Legend ###
+legend(
+  x = fit_rf[['ntree']], y = 0.65, # x,y coordinates.
+  xjust = 1, yjust = 1, # Legend justification.
+  legend = colnames(fit_rf[['err.rate']]), # Legend labels.
+  col = seq_len(ncol(fit_rf[['err.rate']])), # Legend colours.
+  lty = seq_len(ncol(fit_rf[['err.rate']])), # Legend line types.
+  title = 'Outcome', # Legend title.
+  cex = 0.5, # Legend size scaling factor.
+  bty = 'n' # Remove box around legend.
+)
+```
+
+In this case, the plot shows there doesn't appear to be much benefit in growing more than about 200 trees. Overall, the model seems to do well in distinguishing between very inactive periods (`"SitStand"`, `"Sleep"` & `"Mixed"`), but there seems to be confusion between the remaining activities. Our ability to classify walking using our extracted metrics is awful, with a mean misclassification rate hovering at around `r round(fit_rf[['confusion']]['Walking', 'class.error'], 2)`.
+
+## Plot predicted vs. true activity profiles
+
+```{r random-forest-calibration, results = 'hold'}
+### Observed & Predicted ###
+obs <- dt_test[, label]
+pred <- predict(fit_rf, dt_test)
+
+### Plot ###
+## Palette ##
+pal <- viridis(length(unique(obs)))
+## Barplot ##
+barplot(
+  prop.table(table(obs, pred)),
+  col = pal,
+  xlab = 'Observed',
+  ylab = 'Proportion'
+)
+## Legend ##
+legend(
+  'topright',
+  legend = unique(obs),
+  col = pal,
+  pch = 15,
+  title = 'Predicted',
+  cex = 0.8,
+  bty = 'n'
+)
+
+### Tidy Up ###
+rm(obs, pred, pal)
+```
+
+Importance
+
+```{r importance, results = 'hold'}
+importance(fit_rf)
+varImpPlot(fit_rf, main = 'Importance')
+```
+
+<!-- HERE -->
+
+```{r detach-packages, echo = F, results = 'hide'}
+detach('package:randomForest', unload = T)
+```

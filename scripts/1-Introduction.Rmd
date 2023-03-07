@@ -1,0 +1,370 @@
+---
+title: 'Introduction'
+output: github_document
+---
+
+<!-- Notes -->
+<!-- https://github.com/OxWearables/Oxford_Wearables_Activity_Recognition/blob/master/0_Intro.ipynb -->
+<!-- 'viridisLite' package can be used if ggplot2 is not required -->
+
+
+```{r setup, include = F}
+### Knit Options ###
+knitr::opts_knit[['set']](
+  base.dir = '~/Git/Wearables_Activity_Recognition/',
+  root.dir = '~/Git/Wearables_Activity_Recognition/'
+)
+
+### Chunk Options ###
+knitr::opts_chunk[['set']](
+  echo = T,
+  comment = '',
+  dpi = 600,
+  warning = F,
+  message = F,
+  fig.path = 'figures/'
+)
+
+### General Options ###
+options(
+  digits = 7, # Default = 7
+  scipen = 0, # Default = 0
+  width = 120 # Default = 80
+)
+```
+
+
+## Activity recognition on the Capture24 dataset
+
+<img align='center' width='300' src='figures/wrist-accelerometer.jpg'>
+
+The Capture-24 dataset consists of wrist-worn accelerometer data collected from about 151 participants. To obtain ground truth annotations, the participants also wore a body camera during daytime, and used sleep diaries to register their sleep times. Each participant was recorded for roughly 24 hours. The accelerometer was an Axivity AX3 wrist watch (image above) that mearures acceleration in all three axes ($x$, $y$, $z$) at a sampling rate of 100Hz. The body camera was a Vicon Autographer with a sampling rate of 1 picture every 20 seconds. Note that the camera images are not part of the data release --- only the raw acceleration trace with text annotations are provided.
+
+
+## Setup
+
+Install required packages:
+
+```{r install-packages, results = 'hide'}
+### Required Packages ###
+pkgs <- c(
+  'data.table', # Data import/management.
+  'ggplot2', # Grouped data visualisations.
+  'Rtsne', # t-distributed Stochastic Neighbour Embedding.
+  'R.utils', # Uncompressing compressed CSV files.
+  'viridis', # Colour blind friendly palettes.
+  'here' # Get the current project directory
+)
+
+### Packages to Install ###
+pkgs <- pkgs[!{pkgs %in% rownames(installed.packages())}]
+
+### Install (if Required) ###
+install.packages(pkgs)
+
+### Tidy Up ###
+rm(pkgs)
+```
+
+Load required package namespaces:
+
+```{r load-packages, results = 'hide'}
+### Packages ###
+library(ggplot2)
+library(viridis)
+library(data.table)
+library(Rtsne)
+library(here)
+```
+
+Define some useful path variables:
+
+```{r paths}
+### Paths ###
+## Capture-24 Directory ##
+dir_cap24 <- paste0(here(), 'data/capture24sample', sep = '/')
+zip_cap24 <- paste0(here(), 'data/capture24sample.zip', sep = '/')
+```
+
+
+## Load & inspect the dataset
+
+To run this notebook, you'll need a sample of the [Capture-24 dataset](https://ora.ox.ac.uk/objects/uuid:99d7c092-d865-4a19-b096-cc16440cd001).
+This has been uploaded to a google drive, and can be downloaded with the code below.
+
+Download the data:
+```{r data-download, eval = F}
+## Download Capture24 Sample Data ##
+url <- "https://ora.ox.ac.uk/objects/uuid:99d7c092-d865-4a19-b096-cc16440cd001/files/rpr76f381b"
+download.file(url, zip_cap24, mode = "wb", timeout = 1200)
+```
+
+Extract the data:
+```{r data-extract, eval = F}
+## Extract Capture24 Data ##
+unzip(
+  zipfile = zip_cap24,
+  overwrite = F,
+  junkpaths = T,
+  exdir = dir_cap24,
+  unzip = getOption('unzip')
+)
+```
+
+Let's see what's in the extracted archive:
+
+```{r list-files}
+### Print the list of files ###
+list.files(dir_cap24)
+```
+
+Note that for this analysis, we have only downloaded the raw accelerometry data from 1 participant.
+Let's load and inspect the raw data for one that participant (p001):
+
+```{r data-import}
+### Data for Participant 001 ###
+dt_p001 <- fread(
+  file = file.path(dir_cap24, 'P001.csv.gz'), # File path.
+  sep = ',', # Delimiter.
+  na.strings = '' # Missing data encoding.
+)
+
+### First 10 Rows ###
+head(dt_p001, 10)
+```
+
+Check for missing values (`NA`s) and remove any rows containing them:
+
+```{r na-values, results = 'hold'}
+### Check for Rows Containing NAs ###
+cat('NA values present?:\n') # '\n' is the new line feed.
+anyNA(dt_p001)
+
+### Omit Rows Containing NAs ##
+dt_p001 <- dt_p001[complete.cases(dt_p001)]
+```
+
+Let's inspect the `annotation` column:
+
+```{r unique-annotations-1}
+### Unique Annotations Present ###
+anno <- sort(unique(dt_p001[, annotation]))
+
+### Print First 10 ###
+substr(anno, 1, 100)[1:10] # Truncate printing to 100 chars.
+```
+
+The `annotation` column appears to be a nested semi-colon-delimited list of values. We can inspect the unique values present as follows:
+
+```{r unique-annotation-2, results = 'hold'}
+### Split Strings at ';' ###
+anno <- strsplit(anno, ';')
+
+### Unlist ###
+anno <- unlist(anno)
+
+### Sort Unique Values ###
+anno <- sort(unique(anno))
+
+### Print First 10 ###
+substr(anno, 1, 100)[1:10]
+
+### Tidy Up ###
+rm(anno)
+```
+
+The annotations are based on the [Compendium of Physical Activity](https://sites.google.com/site/compendiumofphysicalactivities/home). There are more than 200 unique annotations identified in the whole dataset. As you can see, the annotations can be very detailed.
+
+For our purposes, it is enough to translate the annotations into a simpler set of labels. The provided _annotation-label-dictionary.csv_ file contains a few options that were used in previous works.
+
+```{r annotations-dictionary}
+### Import Annotations Labels ###
+dt_dic <- fread(
+  file = file.path(dir_cap24, 'annotation-label-dictionary.csv'), # File path.
+  sep = ',' # Delimiter.
+)
+
+### Make Life a Little Easier for Ourselves ###
+## Descriptive Padding ##
+setnames(dt_dic, sub('^label:', '', names(dt_dic))) # Swap out special characters.
+
+### First 10 Rows of Annotations ###
+head(dt_dic[, lapply(.SD, substr, 1, 18)], 10) # Truncate printing to 20 chars.
+
+### Create New Factor Representation of the Walmsley 2020 Variable ###
+dt_dic[, label := factor(
+  x = Walmsley2020,
+  levels = c('sleep', 'sedentary', 'light', 'moderate-vigorous'),
+  labels = c('Sleep', 'Sedentary', 'Light', 'MVPA')
+)]
+
+### Translate Annotations Using Walmsley' 2020 Labels ###
+dt_p001 <- merge(
+  x = dt_p001, # Data table `x`.
+  y = dt_dic[, .(annotation, label)], # Data table `y`.
+  by = 'annotation', # Join column.
+  all.x = T, # Left join.
+  sort = F # Don't sort by join column.
+)
+
+### Drop annotation Column ###
+dt_p001[, annotation := NULL]
+
+### Drop Unused Factor Levels ###
+dt_p001[, label := droplevels(label)]
+
+### First 10 Rows ###
+head(dt_p001, 10)
+```
+
+To continue, let's extract 30-sec windows of activity --- these will make up the learning dataset.
+
+```{r 30s-time-windows}
+### Group Data into 30s Windows ###
+breaks <- with(dt_p001, seq(min(time), max(time), by = 30))
+dt_p001[, tgrp := cut(
+  x = time,
+  breaks = breaks,
+  labels = paste0('T', seq_len(length(breaks) - 1L)),
+  include.lowest = T
+)]
+setcolorder(dt_p001, c('tgrp', 'time', 'label')) # Reorder columns.
+
+### Mode Function ###
+Mode <- function(x) {
+  uniqv <- unique(x)
+  uniqv[which.max(tabulate(match(x, uniqv)))]
+}
+
+### Classify 30s Windows Via Majority Vote ###
+dt_p001[, label := Mode(label), by = tgrp]
+
+### Tidy Up ###
+rm(breaks)
+```
+
+Let's take a closer look at the distribution of the labels.
+
+```{r label-distributions}
+### Label Distributions ###
+labs <- dt_p001[, .(label = first(label)), by = tgrp][, label]
+
+### Table ###
+tab <- table(labs)
+tab # N
+round(100*prop.table(tab), 1) # %
+
+### Pie Chart ###
+## Save Original Plotting Environment ##
+oldpar <- par(no.readonly = TRUE)
+
+## Modify Plotting Environment ##
+par(mar = c(b = 0, l = 0, t = 1, r = 0)) # Remove margins.
+
+## Pie Chart ##
+pie(
+  x = tab,
+  main = 'Label distribution (Walmsley)',
+  col = viridis(n = length(tab))
+)
+
+## Restore Original Plotting Environment ##
+par(oldpar)
+
+### Tidy Up ###
+rm(labs, tab, oldpar)
+```
+
+We observe some imbalance in the data. This will likely be an issue later for the machine learning model.
+
+
+## Visualisation
+
+Visualization helps us get some insight and anticipate the difficulties that may arise during the modelling. Let's visualize some examples for each activity label.
+
+```{r visualisation, results = 'hold'}
+### Set Seed ###
+set.seed(42)
+
+### Sample 1 Random 30s Time Window Per Activity Label ###
+samp <- dt_p001[, .SD[1], by = tgrp][, .(tgrp = sample(tgrp, 1)), by = label][, tgrp]
+dt_samp <- dt_p001[tgrp %in% samp]
+
+### Change Time to the Difference Since the Start of the Window ###
+dt_samp[, time := difftime(time, min(time)), by = tgrp]
+dt_samp[, time := as.double(time)] # Can't be done in the above step?
+
+### Reshape-Long For Plotting ###
+dt_samp <- melt(
+  data = dt_samp,
+  id.vars = c('tgrp', 'time', 'label'),
+  variable.name = 'axis',
+  value.name = 'accel'
+)
+
+### Plot ###
+ggplot(dt_samp, aes(x = time, y = accel)) +
+  facet_grid(label ~ .) +
+  labs(x = 'Time (s)', y = 'Acceleration (g)') +
+  geom_line(aes(col = axis)) +
+  scale_colour_viridis_d(name = 'Axis') +
+  theme_bw() +
+  theme(
+    legend.position = 'bottom', # Move legend to the bottom.
+    legend.box.margin = margin(t = -10, r = -10, b = -10, l = -10) # Reduce padding around legend.
+  )
+
+### Tidy Up ###
+rm(samp, dt_samp)
+```
+
+## Feature extraction
+
+Let's extract some commonly used time series features from each activity window. Feel free to engineer your own features!
+
+```{r feature-extraction}
+### Euclidean Distance Function ###
+# Check `base::norm(x, type = 'F')` & `Matrix::norm(x, type = 'F')`
+linalgnorm <- function(x, y, z) {
+  v <- sqrt(x^2 + y^2 + z^2)
+  return(v)
+}
+
+### Some Features ###
+# NB: SD of a Vector of Length == 1 will return NA
+dt_feat <- dt_p001[, .(
+  x_mean = mean(x), # Mean of `x`.
+  x_sd = sd(x), # SD of `x`.
+  y_mean = mean(y), # Mean of `y`.
+  y_sd  = sd(y), # SD of `y`.
+  z_mean = mean(z), # Mean of `z`
+  z_sd = sd(z), # SD of `z`
+  v_mean = mean(linalgnorm(x, y, z)), # Mean of the Euclidean distance.
+  v_sd = sd(linalgnorm(x, y, z)), # SD of the Euclidean distance.
+  label = first(label) # First label value (all values already == mode).
+), by = tgrp]
+
+### Omit NAs ###
+dt_feat <- dt_feat[complete.cases(dt_feat)]
+
+### Drop tgrp Variable ###
+dt_feat[, tgrp := NULL]
+
+### First 2 Rows Per Label ###
+dt_feat[, head(.SD, 2), by = label]
+```
+
+## References
+
+Ideas for hand-crafted features:
+
+* [Physical activity classification using the GENEA wrist-worn accelerometer](https://www.ncbi.nlm.nih.gov/pubmed/21988935)
+* [A universal, accurate intensity-based classification of different physical activities using raw data of accelerometer](https://www.ncbi.nlm.nih.gov/pubmed/24393233)
+* [Activity recognition using a single accelerometer placed at the wrist or ankle](https://www.ncbi.nlm.nih.gov/pubmed/23604069)
+* [Hip and Wrist Accelerometer Algorithms for Free-Living Behavior Classification](https://www.ncbi.nlm.nih.gov/pubmed/26673126)
+
+Papers using the capture24 dataset:
+
+* [Reallocating time from machine-learned sleep, sedentary behaviour or light physical activity to moderate-to-vigorous physical activity is associated with lower cardiovascular disease risk](https://www.medrxiv.org/content/10.1101/2020.11.10.20227769v2.full?versioned=true) (Walmsley2020 labels) 
+* [GWAS identifies 14 loci for device-measured physical activity and sleep duration](https://www.nature.com/articles/s41467-018-07743-4) (Doherty2018 labels)
+* [Statistical machine learning of sleep and physical activity phenotypes from sensor data in 96,220 UK Biobank participants](https://www.nature.com/articles/s41598-018-26174-1) (Willetts2018 labels)
