@@ -1,0 +1,301 @@
+---
+title: 'Unsupervised Learning'
+output: github_document
+---
+
+Only run this notebook for the unsupervised learning lab session.
+
+```{r setup, include = F}
+### Knit Options ###
+knitr::opts_knit[['set']](
+  base.dir = '~/Git/Wearables_Activity_Recognition/',
+  root.dir = '~/Git/Wearables_Activity_Recognition/'
+)
+
+### Chunk Options ###
+knitr::opts_chunk[['set']](
+  echo = T,
+  comment = '',
+  dpi = 600,
+  warning = F,
+  message = F,
+  fig.path = 'figures/'
+)
+
+### General Options ###
+options(
+  digits = 7, # Default = 7
+  scipen = 0, # Default = 0
+  width = 120 # Default = 80
+)
+```
+
+
+## Setup
+
+Install required packages:
+```{r install-packages, results = 'hide'}
+### Required Packages ###
+pkgs <- c(
+  'data.table', # Data import/management.
+  'ggplot2', # Grouped data visualisations.
+  'Rtsne', # t-distributed Stochastic Neighbour Embedding.
+  'viridis', # Colour blind friendly palettes.
+  'randomForest', # Random forest.
+  'here'
+)
+
+### Packages to Install ###
+pkgs <- pkgs[!{pkgs %in% rownames(installed.packages())}]
+
+### Install (if Required) ###
+install.packages(pkgs)
+
+### Tidy Up ###
+rm(pkgs)
+```
+
+Load required package namespaces:
+```{r packages, results = 'hide'}
+### Packages ###
+library(data.table)
+library(randomForest)
+library(ggplot2)
+library(viridis)
+library(Rtsne)
+library(here)
+```
+
+Define some useful path variables:
+```{r paths}
+### Paths ###
+## Capture-24 Directory ##
+dir_cap24 <- paste(here(), 'data/capture24sample', sep = '/')
+zip_cap24 <- paste(here(), 'data/capture24sample.zip', sep = '/')
+```
+
+
+### Data
+
+We make use of the raw accelerometry from the first participant, and features extracted from this participant's signals.
+```{r load-data}
+### Raw data for P001 ###
+dt_p001 <- fread(
+  file = file.path(dir_cap24, 'P001.csv.gz'), # File path.
+  sep = ',', # Delimiter.
+  na.strings = '' # Missing data encoding.
+)
+
+### Data for all participants ###
+dt_feat <- fread(
+  file = file.path(dir_cap24, 'feats_all.csv.gz'), # File path.
+  sep = ',', # Delimiter.
+  na.strings = '' # Missing data encoding.
+)
+
+### Extracted features for P001 ###
+dt_feat_p001 <- dt_feat[dt_feat$participant==1,]
+```
+
+```{r label-raw-data}
+### Import Annotations Labels ###
+dt_dic <- fread(
+  file = file.path(dir_cap24, 'annotation-label-dictionary.csv'), # File path.
+  sep = ',' # Delimiter.
+)
+
+setnames(dt_dic, sub('^label:', '', names(dt_dic))) # Swap out special characters.
+
+### Create New Factor Representation of the Walmsley 2020 Variable ###
+dt_dic[, label := factor(
+  x = Walmsley2020,
+  levels = c('sleep', 'sedentary', 'light', 'moderate-vigorous'),
+  labels = c('Sleep', 'Sedentary', 'Light', 'MVPA')
+)]
+
+### Translate Annotations Using Walmsley' 2020 Labels ###
+dt_p001 <- merge(
+  x = dt_p001, # Data table `x`.
+  y = dt_dic[, .(annotation, label)], # Data table `y`.
+  by = 'annotation', # Join column.
+  all.x = T, # Left join.
+  sort = F # Don't sort by join column.
+)
+
+### Drop annotation Column ###
+dt_p001[, annotation := NULL]
+
+### Drop Unused Factor Levels ###
+dt_p001[, label := droplevels(label)]
+
+### Drop unannotated columns ###
+dt_p001 <- dt_p001[!is.na(dt_p001$label), ]
+```
+
+
+## Unsupervised learning
+
+Unsupervised learning is a form of machine learning that looks to find meaning/structure in disordered data. 
+As opposed to supervised learning, the unsupervised machine learning model is typically not provided truth labels to inform the model of the expected order of the data. 
+Instead, the model derives patterns that it finds within the data. 
+To do so, unsupervised models often require an underlying assumption of the data, for example a fixed number of groups, dimensions or clusters.
+There are three main applications for unsupervised learning; clustering, association rules and dimensionality reduction.
+
+
+### Clustering
+
+Clustering is an unsupervised form of machine learning in which data is grouped into a provided number of clusters.
+This is useful for finding underlying patterns in the data. 
+For example, our model has 4 labels for activity: sleep, sedentary, light and MVPA. 
+If we run an unsupervised model on this data, specifying that we expect 6 clusters, we may find that the data reveals multiple types of sedentary behaviour (e.g working at desk, lounging at home, eating dinner etc.) and group light and MVPA into one cluster of behaviour.
+In this way, unsupervised learning can help support/justify the use of activity labels used.
+This is however not useful in this session, as labels have already been determined.
+
+Can you think of another use of clustering in the context of activity recognition using wearable accelerometers?
+
+
+### Association rules
+
+Association rules is another form of unsupervised learning.
+Here we look to discover rules/patterns in our dataset, that can then be informative of the type of data provided.
+For example, if we split our data by labels, and provide our association rules model a block of only sleep, we can discover the rules sleep behaviour.
+Overall, association rules can be a useful technique, as it can help to identify patterns in the data that correspond to different activities and provide insights into the underlying mechanisms of movement.
+This approach of analysis has not been explored througroughly by the OxWearables group, due to the nature of working with free-living datasets in large populations. 
+
+What limitations can you foresee in trying to build association rules in free-living for large populations?
+
+
+### Dimension reduction
+
+Dimension reduction is the final form of unsupervised learning discussed in this notebook.
+For highly complex, multi-dimensional data, it is very useful to be able to reduce the complexity, particularly in an automated way.
+
+#### PCA visualisation
+
+Principle component analysis (PCA) is one form of dimension reduction function.
+This is done by calculating the axis combination causing highest variation within the dataset.
+Here, we plot the first two PCA components:
+```{r pca-visualisation}
+### Sample 500 Observations Per Label (For Balance) ###
+set.seed(42)
+dt_samp <- dt_p001[, .SD[sample(.N, 5e2)], by = label]
+
+### PCA Model ###
+fit_pca <- prcomp(dt_samp[, .(x, y, z)], scale = T)
+
+### Extract Components ###
+dt_pca <- as.data.table(fit_pca[['x']])
+dt_pca[, label := dt_samp[, label]]
+
+### Plot Components ###
+ggplot(dt_pca, aes(x = PC1, y = PC2)) +
+  geom_point(aes(colour = label, fill = label), alpha = 0.3) +
+  labs(
+    title = 'First 2 Principle Components',
+    x = '1st Principle Component',
+    y = '2nd Principle Component'
+  ) +
+  scale_colour_viridis_d(name = 'Label') +
+  scale_fill_viridis_d(name = 'Label') +
+  theme_bw()
+
+### Tidy Up ###
+rm(dt_samp, fit_pca, dt_pca)
+```
+The "sleep" dots are well clustered together, which supports our guess that it should be easier to classify. 
+However there is a large overlap of points across the different labels.
+
+
+### t-SNE visualisation
+
+PCA's main limitation is in dealing with data that is not linearly separable. Another popular high-dimensional data visualization tool is _t-distributed stochastic neighbour embedding_ (t-SNE). Let's first use it on top of PCA to visualize 50 principal components.
+
+_Note: this may take a while_
+
+```{r, tsne-visualisation}
+### Sample 500 Observations Per Label (For Balance) ###
+set.seed(42)
+dt_samp <- dt_p001[, .SD[sample(.N, 5e2)], by = label]
+
+### Subset & Remove Duplicates ###
+vars <- c('x', 'y', 'z')
+dt_samp <- dt_samp[, .(x, y, z, label)]
+dt_samp <- unique(dt_samp, by = vars)
+
+### t-SNE Model ###
+fit_tsne <- Rtsne(
+  X = dt_samp[, .(x, y, z)],
+  normalize = T # Scale inputs.
+)
+
+### Extract Components ###
+dt_tsne <- as.data.table(fit_tsne[['Y']])
+names(dt_tsne) <- paste0('tsne', seq_along(dt_tsne))
+dt_tsne[, label := dt_samp[, label]]
+
+### Plot First 2 t-SNE Components ###
+ggplot(dt_tsne, aes(x = tsne1, y = tsne2)) +
+  geom_point(aes(colour = label, fill = label), alpha = 0.3) +
+  labs(
+    title = 'First 2 t-SNE Components',
+    x = '1st t-SNE Component',
+    y = 't-SNE 2'
+  ) +
+  scale_colour_viridis_d(name = 'Label') +
+  scale_fill_viridis_d(name = 'Label') +
+  theme_bw()
+
+### Tidy Up ###
+rm(dt_samp, vars, fit_tsne, dt_tsne)
+```
+
+Let's visualize the data again using t-SNE, but this time using the extracted features rather than the principal components.
+
+_Note: this may take a while._
+
+```{r tsne-visualisation-feat}
+### Sample 500 Observations Per Label (For Balance) ###
+set.seed(42)
+dt_samp <- dt_feat_p001[, .SD[sample(.N, 5e2, replace = T)], by = label]
+
+### Subset & Remove Duplicates ###
+vars <- c("x_mean", "x_sd", "y_mean", "y_sd", "z_mean", "z_sd", "v_mean", "v_sd")
+dt_samp <- dt_samp[, c(vars, 'label'), with = F]
+dt_samp <- unique(dt_samp, by = vars)
+
+### t-SNE Model ###
+fit_tsne <- Rtsne(
+  X = dt_samp[, ..vars],
+  normalize = T # Scale inputs.
+)
+
+### Extract Components ###
+dt_tsne <- as.data.table(fit_tsne[['Y']])
+names(dt_tsne) <- paste0('tsne', seq_along(dt_tsne))
+dt_tsne[, label := dt_samp[, label]]
+
+### Plot First 2 t-SNE Components ###
+ggplot(dt_tsne, aes(x = tsne1, y = tsne2)) +
+  geom_point(aes(colour = label, fill = label), alpha = 0.3) +
+  labs(
+    title = 'First 2 t-SNE Components',
+    x = '1st t-SNE Component',
+    y = 't-SNE 2'
+  ) +
+  scale_colour_viridis_d(name = 'Label') +
+  scale_fill_viridis_d(name = 'Label') +
+  theme_bw()
+
+### Tidy Up ###
+rm(dt_samp, vars, fit_tsne, dt_tsne)
+```
+Note that participant 1 only had 6 samples (30s windows) of MVPA, hence is overshadowed by the 500 samples of other activities. 
+Participant 2 however has more samples of MVPA. How would you visualise the t-SNE plot for participant 2?
+```{r tsne-visualisation-feat-2}
+
+```
+
+
+## References
+
+[Unsupervised Machine Learning Explained](https://towardsdatascience.com/unsupervised-machine-learning-explained-1ccc5f20ca29)
