@@ -13,19 +13,15 @@ During the study, participants were instructed to wear a wrist worn acceleromete
 A sleep diary was also used to identify sleep.
 As a result of captured images, it is possible to annotate the activity of participants while wearing the device.
 
-This dataset is incredibly useful, as it allows for: 1.
-The evaluation of the performance of human activity recognition (HAR) models.
-1.
-The development of models trained on this data set to identify activities in unlabeled datasets.
-1.
-Training of self supervised models.
+This dataset is incredibly useful, as it allows for: 
+1. The evaluation of the performance of human activity recognition (HAR) models.
+2. The development of models trained on this data set to identify activities in unlabeled datasets.
+3. Training of self supervised models.
 
-It should however be noted that there are limitations to this dataset: 1.
-Snapshots are only taken every roughly 20 seconds, potentially missing some activities.
-1.
-Snapshots may often not fully characterise the behaviour of the participants.
-1.
-The definition of activity levels can at times be unclear, made further confusing by the mapping between the provided annotations, and desired activity labels.
+It should however be noted that there are limitations to this dataset: 
+1. Snapshots are only taken every roughly 20 seconds, potentially missing some activities.
+2. Snapshots may often not fully characterise the behaviour of the participants.
+3. The definition of activity levels can at times be unclear, made further confusing by the mapping between the provided annotations, and desired activity labels.
 
 ## Getting set up
 
