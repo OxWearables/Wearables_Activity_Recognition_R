@@ -227,16 +227,22 @@ pred <- predict(fit_rf, dt_test)
 ### Plot ###
 ## Palette ##
 pal <- viridis(length(unique(obs)))
+
+### Order table ###
+tbl <- table(obs, pred)
+tbl <- tbl[order(factor(rownames(tbl), levels = unique(obs))),
+           order(factor(colnames(tbl), levels = unique(obs)))]
+
 ## Barplot ##
 barplot(
-  prop.table(table(obs, pred)),
+  prop.table(tbl),
   col = pal,
   xlab = 'Observed',
   ylab = 'Proportion'
 )
 ## Legend ##
 legend(
-  'topleft',
+  'topright',
   legend = unique(obs),
   col = pal,
   pch = 15,
