@@ -97,6 +97,7 @@ dt_feat <- fread(
 dt_feat_p001 <- dt_feat[dt_feat$participant==1,]
 ```
 
+We must convert the annotations for the raw data to Walsmley 2020 labels.
 ```{r label-raw-data}
 ### Import Annotations Labels ###
 dt_dic <- fread(
@@ -136,19 +137,19 @@ dt_p001 <- dt_p001[!is.na(dt_p001$label), ]
 ## Unsupervised learning
 
 Unsupervised learning is a form of machine learning that looks to find meaning/structure in disordered data. 
-As opposed to supervised learning, the unsupervised machine learning model is typically not provided truth labels to inform the model of the expected order of the data. 
+As opposed to supervised learning, unsupervised machine learning models are typically not provided with truth labels to inform the model of the expected order of the data.
 Instead, the model derives patterns that it finds within the data. 
-To do so, unsupervised models often require an underlying assumption of the data, for example a fixed number of groups, dimensions or clusters.
+To do so, unsupervised models often require an underlying assumptions of the data.
 There are three main applications for unsupervised learning; clustering, association rules and dimensionality reduction.
 
 
 ### Clustering
 
-Clustering is an unsupervised form of machine learning in which data is grouped into a provided number of clusters.
-This is useful for finding underlying patterns in the data. 
+Clustering is an unsupervised form of machine learning in which data is grouped into a provided number of clusters (groups).
+This is useful for finding the underlying patterns within data. 
 For example, our model has 4 labels for activity: sleep, sedentary, light and MVPA. 
-If we run an unsupervised model on this data, specifying that we expect 6 clusters, we may find that the data reveals multiple types of sedentary behaviour (e.g working at desk, lounging at home, eating dinner etc.) and group light and MVPA into one cluster of behaviour.
-In this way, unsupervised learning can help support/justify the use of activity labels used.
+If we run an unsupervised model on this data, and state that we expect 4 clusters, we may find that the data separates different types of sedentary behaviour (e.g working at desk vs. lounging at home) while joining together light and MVPA into one cluster of behaviour.
+In this way, unsupervised learning can help support/justify the activity labels used.
 This is however not useful in this session, as labels have already been determined.
 
 Can you think of another use of clustering in the context of activity recognition using wearable accelerometers?
@@ -157,10 +158,10 @@ Can you think of another use of clustering in the context of activity recognitio
 ### Association rules
 
 Association rules is another form of unsupervised learning.
-Here we look to discover rules/patterns in our dataset, that can then be informative of the type of data provided.
-For example, if we split our data by labels, and provide our association rules model a block of only sleep, we can discover the rules sleep behaviour.
+Here we look to discover rules/patterns in our dataset, based on a type of data provided.
+For example, if we split our data by labels, and provide our association rules model a block of only sleep data, we can discover the rules sleep behaviour based on this subset of data.
 Overall, association rules can be a useful technique, as it can help to identify patterns in the data that correspond to different activities and provide insights into the underlying mechanisms of movement.
-This approach of analysis has not been explored througroughly by the OxWearables group, due to the nature of working with free-living datasets in large populations. 
+This approach of analysis has not been explored thoroughly by the OxWearables group, due to the nature of working with free-living datasets in large populations. 
 
 What limitations can you foresee in trying to build association rules in free-living for large populations?
 
