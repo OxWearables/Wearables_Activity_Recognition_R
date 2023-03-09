@@ -42,7 +42,8 @@ pkgs <- c(
   'Rtsne', # t-distributed Stochastic Neighbour Embedding.
   'viridis', # Colour blind friendly palettes.
   'randomForest', # Random forest.
-  'here'
+  'here', # Get the current project directory.
+  'gridExtra' # Plot side by side.
 )
 
 ### Packages to Install ###
@@ -64,6 +65,7 @@ library(ggplot2)
 library(viridis)
 library(Rtsne)
 library(here)
+library(gridExtra)
 ```
 
 Define some useful path variables:
@@ -140,13 +142,12 @@ Unsupervised learning is a form of machine learning that looks to find meaning/s
 As opposed to supervised learning, unsupervised machine learning models are typically not provided with truth labels to inform the model of the expected order of the data.
 Instead, the model derives patterns that it finds within the data. 
 To do so, unsupervised models often require an underlying assumptions of the data.
-There are three main applications for unsupervised learning; association rules, dimensionality reduction and  clustering.
+There are three main applications for unsupervised learning; association rules, dimensionality reduction and clustering.
 
 
 ### Association rules
 
-Association rules is another form of unsupervised learning.
-Here we look to discover rules/patterns in our dataset, based on a type of data provided.
+Association rules is a form of unsupervised learning, where we look to discover rules/patterns in our dataset, based on a type of data provided.
 For example, if we split our data by labels, and provide our association rules model a block of only sleep data, we can discover the rules sleep behaviour based on this subset of data.
 Overall, association rules can be a useful technique, as it can help to identify patterns in the data that correspond to different activities and provide insights into the underlying mechanisms of movement.
 This approach of analysis has not been explored thoroughly by the OxWearables group, due to the nature of working with free-living datasets in large populations. 
@@ -156,8 +157,9 @@ What limitations can you foresee in trying to build association rules in free-li
 
 ### Dimension reduction
 
-Dimension reduction is the final form of unsupervised learning discussed in this notebook.
+Dimension reduction is the another form of unsupervised learning explored in this notebook.
 For highly complex, multi-dimensional data, it is very useful to be able to reduce the complexity, particularly in an automated way.
+This can be used for data simplication, but also visualisation, to create 2D plot of high dimensional data.
 
 #### PCA visualisation
 
@@ -191,6 +193,7 @@ ggplot(dt_pca, aes(x = PC1, y = PC2)) +
 ### Tidy Up ###
 rm(dt_samp, fit_pca, dt_pca)
 ```
+
 The "sleep" dots are well clustered together, which supports our guess that it should be easier to classify. 
 However there is a large overlap of points across the different labels.
 
@@ -326,11 +329,74 @@ rm(dt_samp, vars, fit_tsne, dt_tsne)
 Clustering is an unsupervised form of machine learning in which data is grouped into a provided number of clusters (groups).
 This is useful for finding the underlying patterns within data. 
 For example, our model has 4 labels for activity: sleep, sedentary, light and MVPA. 
-If we run an unsupervised model on this data, and state that we expect 4 clusters, we may find that the data separates different types of sedentary behaviour (e.g working at desk vs. lounging at home) while joining together light and MVPA into one cluster of behaviour.
+If we run an unsupervised model on this data, the generated cluster may or may not align with the truth labels.
 In this way, unsupervised learning can help support/justify the activity labels used.
-This is however not useful in this session, as labels have already been determined.
 
-Can you think of another use of clustering in the context of activity recognition using wearable accelerometers?
+#### K-means
+
+K-means is a type of unsupervised clustering algorithm used to partition a  set of data points into K clusters.
+It does so by iteratively finding centroids for each cluster, and assigning data points to the cluster of the nearest centre.
+Note: we still use t-SNE to visualise the high dimensional, however now label coloring is determined by the kmeans clusters and not truth labels.
+
+```{r clustering}
+dt_feat_p002 <- dt_feat[dt_feat$participant==2,]
+
+### Sample 500 Observations Per Label (For Balance) ###
+set.seed(42)
+dt_samp <- dt_feat_p002[, .SD[sample(.N, 5e2, replace = T)], by = label]
+
+### Subset & Remove Duplicates ###
+vars <- c("x_mean", "x_sd", "y_mean", "y_sd", "z_mean", "z_sd", "v_mean", "v_sd")
+dt_samp <- dt_samp[, c(vars, 'label'), with = F]
+dt_samp <- unique(dt_samp, by = vars)
+
+### K-means 
+k <- 4 # Define the number of expected clusters in the data
+km <- kmeans(scale(dt_samp[, ..vars]), k)
+
+### t-SNE Model ###
+fit_tsne <- Rtsne(
+  X = dt_samp[, ..vars],
+  normalize = T # Scale inputs.
+)
+
+### Extract Components ###
+dt_tsne <- as.data.table(fit_tsne[['Y']])
+names(dt_tsne) <- paste0('tsne', seq_along(dt_tsne))
+dt_tsne[, label := dt_samp[, label]]
+dt_tsne$cluster <- as.factor(km$cluster)
+
+### Plot First 2 t-SNE Components, colour by label ###
+p1 <- ggplot(dt_tsne, aes(x = tsne1, y = tsne2)) +
+  geom_point(aes(colour = label, fill = label), alpha = 0.3) +
+  labs(
+    title = 'First 2 t-SNE Components',
+    x = '1st t-SNE Component',
+    y = 't-SNE 2'
+  ) +
+  scale_colour_viridis_d(name = 'Truth Label') +
+  scale_fill_viridis_d(name = 'Truth Label') +
+  theme_bw()
+
+### Plot First 2 t-SNE Components, colour by cluster ###
+p2 <- ggplot(dt_tsne, aes(x = tsne1, y = tsne2)) +
+  geom_point(aes(colour = cluster, fill = cluster), alpha = 0.3) +
+  labs(
+    title = 'First 2 t-SNE Components',
+    x = '1st t-SNE Component',
+    y = 't-SNE 2'
+  ) +
+  scale_colour_viridis_d(name = 'K-means Cluster') +
+  scale_fill_viridis_d(name = 'K-means Cluster') +
+  theme_bw()
+
+grid.arrange(p1, p2, ncol=2)
+
+### Tidy Up ###
+rm(dt_samp, vars, fit_tsne, dt_tsne)
+```
+What do you think is the meaning behind each of these clusters?
+What happens if you change the number of clusters?
 
 ## References
 
