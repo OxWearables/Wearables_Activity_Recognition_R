@@ -140,19 +140,7 @@ Unsupervised learning is a form of machine learning that looks to find meaning/s
 As opposed to supervised learning, unsupervised machine learning models are typically not provided with truth labels to inform the model of the expected order of the data.
 Instead, the model derives patterns that it finds within the data. 
 To do so, unsupervised models often require an underlying assumptions of the data.
-There are three main applications for unsupervised learning; clustering, association rules and dimensionality reduction.
-
-
-### Clustering
-
-Clustering is an unsupervised form of machine learning in which data is grouped into a provided number of clusters (groups).
-This is useful for finding the underlying patterns within data. 
-For example, our model has 4 labels for activity: sleep, sedentary, light and MVPA. 
-If we run an unsupervised model on this data, and state that we expect 4 clusters, we may find that the data separates different types of sedentary behaviour (e.g working at desk vs. lounging at home) while joining together light and MVPA into one cluster of behaviour.
-In this way, unsupervised learning can help support/justify the activity labels used.
-This is however not useful in this session, as labels have already been determined.
-
-Can you think of another use of clustering in the context of activity recognition using wearable accelerometers?
+There are three main applications for unsupervised learning; association rules, dimensionality reduction and  clustering.
 
 
 ### Association rules
@@ -290,12 +278,59 @@ ggplot(dt_tsne, aes(x = tsne1, y = tsne2)) +
 ### Tidy Up ###
 rm(dt_samp, vars, fit_tsne, dt_tsne)
 ```
+
 Note that participant 1 only had 6 samples (30s windows) of MVPA, hence is overshadowed by the 500 samples of other activities. 
 Participant 2 however has more samples of MVPA. How would you visualise the t-SNE plot for participant 2?
-```{r tsne-visualisation-feat-2}
 
+```{r tsne-visualisation-feat-2}
+dt_feat_p002 <- dt_feat[dt_feat$participant==2,]
+
+### Sample 500 Observations Per Label (For Balance) ###
+set.seed(42)
+dt_samp <- dt_feat_p002[, .SD[sample(.N, 5e2, replace = T)], by = label]
+
+### Subset & Remove Duplicates ###
+vars <- c("x_mean", "x_sd", "y_mean", "y_sd", "z_mean", "z_sd", "v_mean", "v_sd")
+dt_samp <- dt_samp[, c(vars, 'label'), with = F]
+dt_samp <- unique(dt_samp, by = vars)
+
+### t-SNE Model ###
+fit_tsne <- Rtsne(
+  X = dt_samp[, ..vars],
+  normalize = T # Scale inputs.
+)
+
+### Extract Components ###
+dt_tsne <- as.data.table(fit_tsne[['Y']])
+names(dt_tsne) <- paste0('tsne', seq_along(dt_tsne))
+dt_tsne[, label := dt_samp[, label]]
+
+### Plot First 2 t-SNE Components ###
+ggplot(dt_tsne, aes(x = tsne1, y = tsne2)) +
+  geom_point(aes(colour = label, fill = label), alpha = 0.3) +
+  labs(
+    title = 'First 2 t-SNE Components',
+    x = '1st t-SNE Component',
+    y = 't-SNE 2'
+  ) +
+  scale_colour_viridis_d(name = 'Label') +
+  scale_fill_viridis_d(name = 'Label') +
+  theme_bw()
+
+### Tidy Up ###
+rm(dt_samp, vars, fit_tsne, dt_tsne)
 ```
 
+### Clustering
+
+Clustering is an unsupervised form of machine learning in which data is grouped into a provided number of clusters (groups).
+This is useful for finding the underlying patterns within data. 
+For example, our model has 4 labels for activity: sleep, sedentary, light and MVPA. 
+If we run an unsupervised model on this data, and state that we expect 4 clusters, we may find that the data separates different types of sedentary behaviour (e.g working at desk vs. lounging at home) while joining together light and MVPA into one cluster of behaviour.
+In this way, unsupervised learning can help support/justify the activity labels used.
+This is however not useful in this session, as labels have already been determined.
+
+Can you think of another use of clustering in the context of activity recognition using wearable accelerometers?
 
 ## References
 
